@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AmazonDataAnalytics.API.Data;
 using AmazonDataAnalytics.API.Models;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace AmazonDataAnalytics.API.Controllers
 {
@@ -38,22 +39,48 @@ namespace AmazonDataAnalytics.API.Controllers
         public async Task<IActionResult> Update(int id, Supplier supplier)
         {
             if (id != supplier.SupplierId) return BadRequest();
-            _context.Entry(supplier).State = EntityState.Modified;
-            await _context.SaveChangesAsync();
-            return NoContent();
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                using (var transaction = await _context.Database.BeginTransactionAsync())
+                {
+                    var existingSupplier = await _context.Suppliers.AsNoTracking().FirstOrDefaultAsync(s => s.SupplierId == id);
+                    if (existingSupplier == null) return await Task.FromResult<IActionResult>(NotFound());
+                    if (id != supplier.SupplierId)
+                    {
+                        // Cập nhật supplier_id ở các bảng liên quan
+                        await _context.Database.ExecuteSqlRawAsync("UPDATE Supplies SET supplier_id = {0} WHERE supplier_id = {1}", supplier.SupplierId, id);
+                    }
+                    _context.Entry(supplier).State = EntityState.Modified;
+                    await _context.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                    return await Task.FromResult<IActionResult>(NoContent());
+                }
+            });
         }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            var supplies = _context.Supplies.Where(s => s.SupplierId == id);
-            _context.Supplies.RemoveRange(supplies);
-
-            var supplier = await _context.Suppliers.FindAsync(id);
-            if (supplier == null) return NotFound();
-            _context.Suppliers.Remove(supplier);
-            await _context.SaveChangesAsync();
-            return NoContent();
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                using (var transaction = await _context.Database.BeginTransactionAsync())
+                {
+                    try
+                    {
+                        await _context.Database.ExecuteSqlRawAsync("DELETE FROM [Supplies] WHERE supplier_id = {0}", id);
+                        await _context.Database.ExecuteSqlRawAsync("DELETE FROM [Supplier] WHERE supplier_id = {0}", id);
+                        await transaction.CommitAsync();
+                        return NoContent();
+                    }
+                    catch
+                    {
+                        await transaction.RollbackAsync();
+                        throw;
+                    }
+                }
+            });
         }
 
         [HttpGet("filter")]

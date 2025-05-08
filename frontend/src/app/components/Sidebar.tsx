@@ -1,8 +1,9 @@
 import React from 'react';
 import Link from 'next/link';
-import { FaTachometerAlt, FaBox, FaUsers, FaUserTie, FaWarehouse, FaTruck, FaShoppingCart } from 'react-icons/fa';
+import { FaHome, FaTachometerAlt, FaBox, FaUsers, FaUserTie, FaWarehouse, FaTruck, FaShoppingCart } from 'react-icons/fa';
 
 const menuItems = [
+  { href: '/', icon: <FaHome />, label: 'Home' },
   { href: '/dashboard', icon: <FaTachometerAlt />, label: 'Dashboard' },
   { href: '/products', icon: <FaBox />, label: 'Products' },
   { href: '/customers', icon: <FaUsers />, label: 'Customers' },

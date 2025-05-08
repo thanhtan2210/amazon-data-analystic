@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AmazonDataAnalytics.API.Data;
 using AmazonDataAnalytics.API.Models;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace AmazonDataAnalytics.API.Controllers
 {
@@ -48,19 +49,50 @@ namespace AmazonDataAnalytics.API.Controllers
         public async Task<IActionResult> Update(int id, Employee employee)
         {
             if (id != employee.EmployeeId) return BadRequest();
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                using (var transaction = await _context.Database.BeginTransactionAsync())
+                {
+                    var existingEmployee = await _context.Employees.AsNoTracking().FirstOrDefaultAsync(e => e.EmployeeId == id);
+                    if (existingEmployee == null) return await Task.FromResult<IActionResult>(NotFound());
+                    if (id != employee.EmployeeId)
+                    {
+                        // Cập nhật employee_id ở các bảng liên quan
+                        await _context.Database.ExecuteSqlRawAsync("UPDATE Supervises SET employee_id = {0} WHERE employee_id = {1}", employee.EmployeeId, id);
+                        await _context.Database.ExecuteSqlRawAsync("UPDATE Manages SET employee_id = {0} WHERE employee_id = {1}", employee.EmployeeId, id);
+                    }
             _context.Entry(employee).State = EntityState.Modified;
             await _context.SaveChangesAsync();
-            return NoContent();
+                    await transaction.CommitAsync();
+                    return await Task.FromResult<IActionResult>(NoContent());
+                }
+            });
         }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            var employee = await _context.Employees.FindAsync(id);
-            if (employee == null) return NotFound();
-            _context.Employees.Remove(employee);
-            await _context.SaveChangesAsync();
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                using (var transaction = await _context.Database.BeginTransactionAsync())
+                {
+                    try
+                    {
+                        await _context.Database.ExecuteSqlRawAsync("DELETE FROM [Supervises] WHERE employee_id = {0}", id);
+                        await _context.Database.ExecuteSqlRawAsync("DELETE FROM [Manages] WHERE employee_id = {0}", id);
+                        await _context.Database.ExecuteSqlRawAsync("DELETE FROM [Employee] WHERE employee_id = {0}", id);
+                        await transaction.CommitAsync();
             return NoContent();
+                    }
+                    catch
+                    {
+                        await transaction.RollbackAsync();
+                        throw;
+                    }
+                }
+            });
         }
 
         [HttpGet("filter")]

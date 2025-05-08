@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AmazonDataAnalytics.API.Data;
 using AmazonDataAnalytics.API.Models;
-using System.ComponentModel.DataAnnotations;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace AmazonDataAnalytics.API.Controllers
 {
@@ -20,154 +20,107 @@ namespace AmazonDataAnalytics.API.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
-        {
-            try
-            {
-                if (page < 1 || pageSize < 1)
-                    return BadRequest("Page and pageSize must be greater than 0");
-
-                var query = _context.Warehouses.AsQueryable();
-                var total = await query.CountAsync();
-                var data = await query
-                    .OrderBy(e => e.WarehouseId)
-                    .Skip((page - 1) * pageSize)
-                    .Take(pageSize)
-                    .ToListAsync();
-
-                return Ok(new { data, total, page, pageSize });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error occurred while getting all warehouses");
-                return StatusCode(500, "An error occurred while processing your request");
-            }
-        }
+        public async Task<IActionResult> GetAll() => Ok(await _context.Warehouses.ToListAsync());
 
         [HttpGet("{id}")]
         public async Task<IActionResult> Get(int id)
         {
-            try
-            {
-                var warehouse = await _context.Warehouses.FindAsync(id);
-                if (warehouse == null) return NotFound($"Warehouse with ID {id} not found");
-                return Ok(warehouse);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error occurred while getting warehouse with ID {id}");
-                return StatusCode(500, "An error occurred while processing your request");
-            }
+            var warehouse = await _context.Warehouses.FindAsync(id);
+            if (warehouse == null) return NotFound();
+            return Ok(warehouse);
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] Warehouse warehouse)
+        public async Task<IActionResult> Create(Warehouse warehouse)
         {
-            try
-            {
-                if (!ModelState.IsValid)
-                    return BadRequest(ModelState);
-
-                _context.Warehouses.Add(warehouse);
-                await _context.SaveChangesAsync();
-                return CreatedAtAction(nameof(Get), new { id = warehouse.WarehouseId }, warehouse);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error occurred while creating warehouse");
-                return StatusCode(500, "An error occurred while processing your request");
-            }
+            _context.Warehouses.Add(warehouse);
+            await _context.SaveChangesAsync();
+            return CreatedAtAction(nameof(Get), new { id = warehouse.WarehouseId }, warehouse);
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] Warehouse warehouse)
+        public async Task<IActionResult> Update(int id, Warehouse warehouse)
         {
-            try
+            if (id != warehouse.WarehouseId) return BadRequest();
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                if (!ModelState.IsValid)
-                    return BadRequest(ModelState);
-
-                if (id != warehouse.WarehouseId)
-                    return BadRequest("ID mismatch");
-
-                var existingWarehouse = await _context.Warehouses.FindAsync(id);
-                if (existingWarehouse == null)
-                    return NotFound($"Warehouse with ID {id} not found");
-
-                _context.Entry(existingWarehouse).CurrentValues.SetValues(warehouse);
-                await _context.SaveChangesAsync();
-                return NoContent();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error occurred while updating warehouse with ID {id}");
-                return StatusCode(500, "An error occurred while processing your request");
-            }
+                using (var transaction = await _context.Database.BeginTransactionAsync())
+                {
+                    var existingWarehouse = await _context.Warehouses.AsNoTracking().FirstOrDefaultAsync(w => w.WarehouseId == id);
+                    if (existingWarehouse == null) return await Task.FromResult<IActionResult>(NotFound());
+                    if (id != warehouse.WarehouseId)
+                    {
+                        await _context.Database.ExecuteSqlRawAsync("UPDATE Stores SET warehouse_id = {0} WHERE warehouse_id = {1}", warehouse.WarehouseId, id);
+                        await _context.Database.ExecuteSqlRawAsync("UPDATE Supervises SET warehouse_id = {0} WHERE warehouse_id = {1}", warehouse.WarehouseId, id);
+                    }
+                    _context.Entry(warehouse).State = EntityState.Modified;
+                    await _context.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                    return await Task.FromResult<IActionResult>(NoContent());
+                }
+            });
         }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            try
+            var warehouse = await _context.Warehouses.FindAsync(id);
+            if (warehouse == null) return NotFound();
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                var warehouse = await _context.Warehouses.FindAsync(id);
-                if (warehouse == null)
-                    return NotFound($"Warehouse with ID {id} not found");
-
-                // Delete related records
-                var stores = await _context.Stores.Where(s => s.WarehouseId == id).ToListAsync();
-                _context.Stores.RemoveRange(stores);
-
-                // Remove Supervises records
-                var supervises = await _context.Supervises.Where(s => s.WarehouseId == id).ToListAsync();
-                _context.Supervises.RemoveRange(supervises);
-
-                _context.Warehouses.Remove(warehouse);
-                await _context.SaveChangesAsync();
-                return NoContent();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error occurred while deleting warehouse with ID {id}");
-                return StatusCode(500, "An error occurred while processing your request");
-            }
+                using (var transaction = await _context.Database.BeginTransactionAsync())
+                {
+                    try
+                    {
+                        await _context.Database.ExecuteSqlRawAsync("DELETE FROM [Stores] WHERE warehouse_id = {0}", id);
+                        await _context.Database.ExecuteSqlRawAsync("DELETE FROM [Supervises] WHERE warehouse_id = {0}", id);
+                        await _context.Database.ExecuteSqlRawAsync("DELETE FROM [Warehouse] WHERE warehouse_id = {0}", id);
+                        await transaction.CommitAsync();
+                        return await Task.FromResult<IActionResult>(NoContent());
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"Error occurred while deleting warehouse with ID {id}");
+                        await transaction.RollbackAsync();
+                        return await Task.FromResult<IActionResult>(StatusCode(500, $"Error: {ex.Message}"));
+                    }
+                }
+            });
         }
 
         [HttpGet("filter")]
         public async Task<IActionResult> Filter(
+            [FromQuery] string? name,
             [FromQuery] string? status,
             [FromQuery] decimal? minArea,
             [FromQuery] decimal? maxArea,
             [FromQuery] decimal? minCapacity,
             [FromQuery] decimal? maxCapacity)
         {
-            try
-            {
-                var query = _context.Warehouses.AsQueryable();
+            var query = _context.Warehouses.AsQueryable();
 
-                if (!string.IsNullOrEmpty(status))
-                    query = query.Where(w => w.Status == status);
+            if (!string.IsNullOrEmpty(name))
+                query = query.Where(w => w.WarehouseName.Contains(name));
 
-                if (minArea.HasValue)
-                    query = query.Where(w => w.Area >= minArea.Value);
+            if (!string.IsNullOrEmpty(status))
+                query = query.Where(w => w.Status == status);
 
-                if (maxArea.HasValue)
-                    query = query.Where(w => w.Area <= maxArea.Value);
+            if (minArea.HasValue)
+                query = query.Where(w => w.Area >= minArea.Value);
 
-                if (minCapacity.HasValue)
-                    query = query.Where(w => w.Capacity >= minCapacity.Value);
+            if (maxArea.HasValue)
+                query = query.Where(w => w.Area <= maxArea.Value);
 
-                if (maxCapacity.HasValue)
-                    query = query.Where(w => w.Capacity <= maxCapacity.Value);
+            if (minCapacity.HasValue)
+                query = query.Where(w => w.Capacity >= minCapacity.Value);
 
-                var result = await query.ToListAsync();
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error occurred while filtering warehouses");
-                return StatusCode(500, "An error occurred while processing your request");
-            }
+            if (maxCapacity.HasValue)
+                query = query.Where(w => w.Capacity <= maxCapacity.Value);
+
+            var result = await query.ToListAsync();
+            return Ok(result);
         }
     }
 } 

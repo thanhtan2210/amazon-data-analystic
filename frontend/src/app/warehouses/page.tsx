@@ -4,11 +4,11 @@ import React, { useEffect, useState } from 'react';
 interface Warehouse {
   warehouseId: number;
   warehouseName: string;
-  area?: number;
-  capacity?: number;
-  status?: string;
-  phoneNumber?: string;
-  stockQuantity?: number;
+  area: number;
+  capacity: number;
+  status: string;
+  phoneNumber: string;
+  stockQuantity: number;
 }
 
 export default function WarehousesPage() {
@@ -18,7 +18,13 @@ export default function WarehousesPage() {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Warehouse | null>(null);
   const [form, setForm] = useState<Warehouse>({
-    warehouseId: 0, warehouseName: '', area: 0, capacity: 0, status: '', phoneNumber: '', stockQuantity: 0
+    warehouseId: 0,
+    warehouseName: '',
+    area: 0,
+    capacity: 0,
+    status: '',
+    phoneNumber: '',
+    stockQuantity: 0
   });
 
   const fetchWarehouses = async () => {
@@ -34,7 +40,7 @@ export default function WarehousesPage() {
     if (params.length) url += '/filter?' + params.join('&');
     const res = await fetch(url);
     const data = await res.json();
-    setWarehouses(Array.isArray(data) ? data : data.data || []);
+    setWarehouses(data);
     setLoading(false);
   };
 
@@ -42,7 +48,15 @@ export default function WarehousesPage() {
 
   const handleAdd = () => {
     setEditing(null);
-    setForm({ warehouseId: 0, warehouseName: '', area: 0, capacity: 0, status: '', phoneNumber: '', stockQuantity: 0 });
+    setForm({
+      warehouseId: 0,
+      warehouseName: '',
+      area: 0,
+      capacity: 0,
+      status: '',
+      phoneNumber: '',
+      stockQuantity: 0
+    });
     setShowModal(true);
   };
 
@@ -138,34 +152,30 @@ export default function WarehousesPage() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Area</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Capacity</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock Qty</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock</th>
               <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {loading ? (
-              <tr><td colSpan={8} className="text-center py-8">Loading...</td></tr>
+              <tr><td colSpan={6} className="text-center py-8">Loading...</td></tr>
             ) : warehouses.length === 0 ? (
-              <tr><td colSpan={8} className="text-center py-8 text-gray-400">No warehouses found.</td></tr>
+              <tr><td colSpan={6} className="text-center py-8 text-gray-400">No warehouses found.</td></tr>
             ) : (
-              warehouses.map(wh => (
-                <tr key={wh.warehouseId} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">{wh.warehouseId}</td>
-                  <td className="px-6 py-4 whitespace-nowrap font-semibold">{wh.warehouseName}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{wh.area}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{wh.capacity}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{wh.status}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{wh.phoneNumber}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{wh.stockQuantity}</td>
+              warehouses.map(warehouse => (
+                <tr key={warehouse.warehouseId} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap font-semibold">{warehouse.warehouseName}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{warehouse.area}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{warehouse.capacity}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{warehouse.status}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{warehouse.stockQuantity}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <button className="text-blue-600 hover:underline mr-3" onClick={() => handleEdit(wh)}>Edit</button>
-                    <button className="text-red-600 hover:underline" onClick={() => handleDelete(wh.warehouseId)}>Delete</button>
+                    <button className="text-blue-600 hover:underline mr-3" onClick={() => handleEdit(warehouse)}>Edit</button>
+                    <button className="text-red-600 hover:underline" onClick={() => handleDelete(warehouse.warehouseId)}>Delete</button>
                   </td>
                 </tr>
               ))
@@ -174,28 +184,26 @@ export default function WarehousesPage() {
         </table>
       </div>
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-8 rounded-lg">
-            <h2 className="text-2xl font-bold mb-4">{editing ? 'Edit Warehouse' : 'Add Warehouse'}</h2>
-            <form onSubmit={handleSubmit}>
-              <label className="block mb-1 font-medium">Warehouse Name</label>
-              <input type="text" id="warehouseName" name="warehouseName" value={form.warehouseName} onChange={(e) => setForm(f => ({ ...f, warehouseName: e.target.value }))} className="mb-3 w-full border rounded px-3 py-2" />
-              <label className="block mb-1 font-medium">Area</label>
-              <input type="number" id="area" name="area" value={form.area} onChange={(e) => setForm(f => ({ ...f, area: Number(e.target.value) }))} className="mb-3 w-full border rounded px-3 py-2" />
-              <label className="block mb-1 font-medium">Capacity</label>
-              <input type="number" id="capacity" name="capacity" value={form.capacity} onChange={(e) => setForm(f => ({ ...f, capacity: Number(e.target.value) }))} className="mb-3 w-full border rounded px-3 py-2" />
-              <label className="block mb-1 font-medium">Status</label>
-              <input type="text" id="status" name="status" value={form.status} onChange={(e) => setForm(f => ({ ...f, status: e.target.value }))} className="mb-3 w-full border rounded px-3 py-2" />
-              <label className="block mb-1 font-medium">Phone Number</label>
-              <input type="text" id="phoneNumber" name="phoneNumber" value={form.phoneNumber} onChange={(e) => setForm(f => ({ ...f, phoneNumber: e.target.value }))} className="mb-3 w-full border rounded px-3 py-2" />
-              <label className="block mb-1 font-medium">Stock Quantity</label>
-              <input type="number" id="stockQuantity" name="stockQuantity" value={form.stockQuantity} onChange={(e) => setForm(f => ({ ...f, stockQuantity: Number(e.target.value) }))} className="mb-3 w-full border rounded px-3 py-2" />
-              <div className="flex gap-2 mt-4">
-                <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded font-semibold hover:bg-blue-700">{editing ? 'Update' : 'Add'}</button>
-                <button type="button" onClick={() => setShowModal(false)} className="bg-gray-200 text-gray-700 px-4 py-2 rounded font-semibold hover:bg-gray-300 ml-2">Cancel</button>
-              </div>
-            </form>
-          </div>
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+          <form className="bg-white p-6 rounded-lg" onSubmit={handleSubmit}>
+            <h2 className="text-2xl font-bold mb-4">{editing ? "Edit Warehouse" : "Add Warehouse"}</h2>
+            <label className="block mb-1 font-medium">Warehouse Name</label>
+            <input className="mb-3 w-full border rounded px-3 py-2" placeholder="Warehouse Name" value={form.warehouseName} onChange={e => setForm({ ...form, warehouseName: e.target.value })} required />
+            <label className="block mb-1 font-medium">Area</label>
+            <input type="number" className="mb-3 w-full border rounded px-3 py-2" placeholder="Area" value={form.area} onChange={e => setForm({ ...form, area: Number(e.target.value) })} required />
+            <label className="block mb-1 font-medium">Capacity</label>
+            <input type="number" className="mb-3 w-full border rounded px-3 py-2" placeholder="Capacity" value={form.capacity} onChange={e => setForm({ ...form, capacity: Number(e.target.value) })} required />
+            <label className="block mb-1 font-medium">Status</label>
+            <input className="mb-3 w-full border rounded px-3 py-2" placeholder="Status" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} required />
+            <label className="block mb-1 font-medium">Phone Number</label>
+            <input className="mb-3 w-full border rounded px-3 py-2" placeholder="Phone Number" value={form.phoneNumber} onChange={e => setForm({ ...form, phoneNumber: e.target.value })} />
+            <label className="block mb-1 font-medium">Stock Quantity</label>
+            <input type="number" className="mb-3 w-full border rounded px-3 py-2" placeholder="Stock Quantity" value={form.stockQuantity} onChange={e => setForm({ ...form, stockQuantity: Number(e.target.value) })} />
+            <div className="flex gap-2 mt-4">
+              <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded font-semibold hover:bg-blue-700">{editing ? "Update" : "Add"}</button>
+              <button type="button" className="bg-gray-200 text-gray-700 px-4 py-2 rounded font-semibold hover:bg-gray-300" onClick={() => setShowModal(false)}>Cancel</button>
+            </div>
+          </form>
         </div>
       )}
     </div>

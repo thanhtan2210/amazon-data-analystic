@@ -21,12 +21,14 @@ interface Product {
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [totalStocks, setTotalStocks] = useState<{ [key: number]: number }>({});
+  const [stockStatuses, setStockStatuses] = useState<{ [key: number]: string }>({});
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState({ name: '', category: '', minPrice: '', maxPrice: '' });
   const [modalOpen, setModalOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
 
-  async function fetchProducts() {
+  async function fetchProductsAndStock() {
     setLoading(true);
     let url = `${process.env.NEXT_PUBLIC_API_URL}/products`;
     const params = [];
@@ -37,11 +39,33 @@ export default function ProductsPage() {
     if (params.length) url += '/filter?' + params.join('&');
     const res = await fetch(url);
     const data = await res.json();
-    setProducts(Array.isArray(data) ? data : data.data || []);
+    const productList = Array.isArray(data) ? data : data.data || [];
+    setProducts(productList);
+
+    // Fetch stock info song song
+    const totalStockPromises = productList.map(async (p: Product) => {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/products/${p.productId}/total-stock`);
+      const data = await res.json();
+      return { id: p.productId, total: data.totalStock };
+    });
+    const statusPromises = productList.map(async (p: Product) => {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/products/${p.productId}/stock-status`);
+      const data = await res.json();
+      return { id: p.productId, status: data.status };
+    });
+    const [totalResults, statusResults] = await Promise.all([
+      Promise.all(totalStockPromises),
+      Promise.all(statusPromises)
+    ]);
+    setTotalStocks(Object.fromEntries(totalResults.map(r => [r.id, r.total])));
+    setStockStatuses(Object.fromEntries(statusResults.map(r => [r.id, r.status])));
     setLoading(false);
   }
 
-  useEffect(() => { fetchProducts(); }, [filter]);
+  useEffect(() => {
+    fetchProductsAndStock();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]);
 
   async function handleAddOrEdit(product: Product) {
     try {
@@ -62,7 +86,7 @@ export default function ProductsPage() {
       }
       setModalOpen(false);
       setEditProduct(null);
-      await fetchProducts();
+      await fetchProductsAndStock();
     } catch (e) {
       alert('Error!');
     }
@@ -73,7 +97,7 @@ export default function ProductsPage() {
     try {
       await fetch(`${process.env.NEXT_PUBLIC_API_URL}/products/${id}`, { method: 'DELETE' });
       alert('Product deleted!');
-      await fetchProducts();
+      await fetchProductsAndStock();
     } catch (e) {
       alert('Error!');
     }
@@ -133,6 +157,8 @@ export default function ProductsPage() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Brand</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Stock</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock Status</th>
               <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
             </tr>
           </thead>
@@ -150,6 +176,12 @@ export default function ProductsPage() {
                   <td className="px-6 py-4 whitespace-nowrap">{product.brand}</td>
                   <td className="px-6 py-4 whitespace-nowrap">${product.price?.toLocaleString()}</td>
                   <td className="px-6 py-4 whitespace-nowrap">{product.description}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{product.productId !== undefined ? (totalStocks[product.productId] ?? '...') : 'N/A'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={product.productId !== undefined && stockStatuses[product.productId] === 'Almost out of stock' ? 'text-red-500' : 'text-green-600'}>
+                      {product.productId !== undefined ? (stockStatuses[product.productId] ?? '...') : 'N/A'}
+                    </span>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     <button className="text-blue-600 hover:underline mr-3" onClick={() => { setEditProduct(product); setModalOpen(true); }}>Edit</button>
                     <button className="text-red-600 hover:underline" onClick={() => handleDelete(product.productId!)}>Delete</button>

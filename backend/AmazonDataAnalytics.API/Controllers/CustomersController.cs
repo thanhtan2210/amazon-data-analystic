@@ -2,15 +2,20 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AmazonDataAnalytics.API.Data;
 using AmazonDataAnalytics.API.Models;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging;
 
 [ApiController]
 [Route("api/[controller]")]
 public class CustomersController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
-    public CustomersController(ApplicationDbContext context)
+    private readonly ILogger<CustomersController> _logger;
+
+    public CustomersController(ApplicationDbContext context, ILogger<CustomersController> logger)
     {
         _context = context;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -36,28 +41,53 @@ public class CustomersController : ControllerBase
     public async Task<IActionResult> Update(int id, Customer customer)
     {
         if (id != customer.CustomerId) return BadRequest();
-        _context.Entry(customer).State = EntityState.Modified;
-        await _context.SaveChangesAsync();
-        return NoContent();
+        var strategy = _context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            using (var transaction = await _context.Database.BeginTransactionAsync())
+            {
+                var existingCustomer = await _context.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.CustomerId == id);
+                if (existingCustomer == null) return await Task.FromResult<IActionResult>(NotFound());
+                if (id != customer.CustomerId)
+                {
+                    // Cập nhật customer_id ở các bảng liên quan
+                    await _context.Database.ExecuteSqlRawAsync("UPDATE [Order] SET customer_id = {0} WHERE customer_id = {1}", customer.CustomerId, id);
+                }
+                _context.Entry(customer).State = EntityState.Modified;
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return await Task.FromResult<IActionResult>(NoContent());
+            }
+        });
     }
 
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
-        // Xóa các đơn hàng của customer (nếu muốn xóa cascade)
-        var orders = _context.Orders.Where(o => o.CustomerId == id);
-        foreach (var order in orders)
+        var warehouse = await _context.Warehouses.FindAsync(id);
+        if (warehouse == null)
+            return await Task.FromResult<IActionResult>(NotFound($"Warehouse with ID {id} not found"));
+        var strategy = _context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
         {
-            var contains = _context.Contains.Where(c => c.OrderId == order.OrderId);
-            _context.Contains.RemoveRange(contains);
-        }
-        _context.Orders.RemoveRange(orders);
-
-        var customer = await _context.Customers.FindAsync(id);
-        if (customer == null) return NotFound();
-        _context.Customers.Remove(customer);
-        await _context.SaveChangesAsync();
-        return NoContent();
+            using (var transaction = await _context.Database.BeginTransactionAsync())
+            {
+                try
+                {
+                    await _context.Database.ExecuteSqlRawAsync("DELETE FROM [Stores] WHERE warehouse_id = {0}", id);
+                    await _context.Database.ExecuteSqlRawAsync("DELETE FROM [Supervises] WHERE warehouse_id = {0}", id);
+                    await _context.Database.ExecuteSqlRawAsync("DELETE FROM [Warehouse] WHERE warehouse_id = {0}", id);
+                    await transaction.CommitAsync();
+                    return await Task.FromResult<IActionResult>(NoContent());
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Error occurred while deleting warehouse with ID {id}");
+                    await transaction.RollbackAsync();
+                    return await Task.FromResult<IActionResult>(StatusCode(500, $"Error: {ex.Message}"));
+                }
+            }
+        });
     }
 
     [HttpGet("filter")]

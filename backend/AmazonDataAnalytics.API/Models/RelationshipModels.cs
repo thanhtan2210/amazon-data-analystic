@@ -9,10 +9,14 @@ namespace AmazonDataAnalytics.API.Models
         public int EmployeeId { get; set; }
         [Column("warehouse_id")]
         public int WarehouseId { get; set; }
+        [Column("start_date")]
+        public DateTime StartDate { get; set; }
+        [Column("end_date")]
+        public DateTime? EndDate { get; set; }
         [NotMapped]
-        public Employee Employee { get; set; }
+        public required Employee Employee { get; set; }
         [NotMapped]
-        public Warehouse Warehouse { get; set; }
+        public required Warehouse Warehouse { get; set; }
     }
 
     [Table("Manages")]
@@ -22,10 +26,14 @@ namespace AmazonDataAnalytics.API.Models
         public int EmployeeId { get; set; }
         [Column("order_id")]
         public int OrderId { get; set; }
+        [Column("start_date")]
+        public DateTime StartDate { get; set; }
+        [Column("end_date")]
+        public DateTime? EndDate { get; set; }
         [NotMapped]
-        public Employee Employee { get; set; }
+        public required Employee Employee { get; set; }
         [NotMapped]
-        public Order Order { get; set; }
+        public required Order Order { get; set; }
     }
 
     [Table("Supplies")]
@@ -36,9 +44,9 @@ namespace AmazonDataAnalytics.API.Models
         [Column("product_id")]
         public int ProductId { get; set; }
         [NotMapped]
-        public Supplier Supplier { get; set; }
+        public required Supplier Supplier { get; set; }
         [NotMapped]
-        public Product Product { get; set; }
+        public required Product Product { get; set; }
     }
 
     [Table("Stores")]
@@ -50,10 +58,12 @@ namespace AmazonDataAnalytics.API.Models
         public int ProductId { get; set; }
         [Column("stock_quantity")]
         public int StockQuantity { get; set; }
+        [Column("last_updated")]
+        public DateTime LastUpdated { get; set; }
         [NotMapped]
-        public Warehouse Warehouse { get; set; }
+        public required Warehouse Warehouse { get; set; }
         [NotMapped]
-        public Product Product { get; set; }
+        public required Product Product { get; set; }
     }
 
     [Table("Contains")]
@@ -66,9 +76,9 @@ namespace AmazonDataAnalytics.API.Models
         [Column("quantity")]
         public int Quantity { get; set; }
         [NotMapped]
-        public Order Order { get; set; }
+        public required Order Order { get; set; }
         [NotMapped]
-        public Product Product { get; set; }
+        public required Product Product { get; set; }
     }
 
     [Table("Apply")]
@@ -78,9 +88,11 @@ namespace AmazonDataAnalytics.API.Models
         public int DiscountId { get; set; }
         [Column("order_id")]
         public int OrderId { get; set; }
+        [Column("discount", TypeName = "decimal(5,2)")]
+        public decimal DiscountAmount { get; set; }
         [NotMapped]
-        public Discount Discount { get; set; }
+        public required Order Order { get; set; }
         [NotMapped]
-        public Order Order { get; set; }
+        public required Discount Discount { get; set; }
     }
 } 

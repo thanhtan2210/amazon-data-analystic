@@ -10,14 +10,14 @@ namespace AmazonDataAnalytics.API.Models
         [Column("supplier_id")]
         public int SupplierId { get; set; }
         [Column("company_name")]
-        public string CompanyName { get; set; }
+        public required string CompanyName { get; set; }
         [Column("representative_name")]
-        public string RepresentativeName { get; set; }
+        public required string RepresentativeName { get; set; }
         [Column("phone_number")]
-        public string PhoneNumber { get; set; }
+        public required string PhoneNumber { get; set; }
         [Column("email")]
-        public string Email { get; set; }
+        public required string Email { get; set; }
         [NotMapped]
-        public ICollection<Supplies> Supplies { get; set; }
+        public ICollection<Supplies> Supplies { get; set; } = new List<Supplies>();
     }
 } 

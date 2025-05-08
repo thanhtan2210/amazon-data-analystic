@@ -7,21 +7,36 @@
 -- Create Database
 -- Note: In Azure SQL, you typically create the database through Azure portal or CLI
 -- This script assumes the database already exists and you're executing within it
--- Drop tables if they exist (for clean setup)
-IF OBJECT_ID('dbo.[Contains]', 'U') IS NOT NULL DROP TABLE dbo.[Contains];
-IF OBJECT_ID('dbo.Apply', 'U') IS NOT NULL DROP TABLE dbo.Apply;
-IF OBJECT_ID('dbo.Manages', 'U') IS NOT NULL DROP TABLE dbo.Manages;
-IF OBJECT_ID('dbo.Stores', 'U') IS NOT NULL DROP TABLE dbo.Stores;
-IF OBJECT_ID('dbo.Supplies', 'U') IS NOT NULL DROP TABLE dbo.Supplies;
-IF OBJECT_ID('dbo.Supervises', 'U') IS NOT NULL DROP TABLE dbo.Supervises;
-IF OBJECT_ID('dbo.Shipping', 'U') IS NOT NULL DROP TABLE dbo.Shipping;
-IF OBJECT_ID('dbo.Discount', 'U') IS NOT NULL DROP TABLE dbo.Discount;
-IF OBJECT_ID('dbo.[Order]', 'U') IS NOT NULL DROP TABLE dbo.[Order];
-IF OBJECT_ID('dbo.Customer', 'U') IS NOT NULL DROP TABLE dbo.Customer;
-IF OBJECT_ID('dbo.Supplier', 'U') IS NOT NULL DROP TABLE dbo.Supplier;
-IF OBJECT_ID('dbo.Product', 'U') IS NOT NULL DROP TABLE dbo.Product;
-IF OBJECT_ID('dbo.Warehouse', 'U') IS NOT NULL DROP TABLE dbo.Warehouse;
-IF OBJECT_ID('dbo.Employee', 'U') IS NOT NULL DROP TABLE dbo.Employee;
+-- Drop relationship tables (con) trước
+-- IF OBJECT_ID('dbo.[Contains]', 'U') IS NOT NULL DROP TABLE dbo.[Contains];
+-- IF OBJECT_ID('dbo.Apply', 'U') IS NOT NULL DROP TABLE dbo.Apply;
+-- IF OBJECT_ID('dbo.Manages', 'U') IS NOT NULL DROP TABLE dbo.Manages;
+-- IF OBJECT_ID('dbo.Stores', 'U') IS NOT NULL DROP TABLE dbo.Stores;
+-- IF OBJECT_ID('dbo.Supplies', 'U') IS NOT NULL DROP TABLE dbo.Supplies;
+-- IF OBJECT_ID('dbo.Supervises', 'U') IS NOT NULL DROP TABLE dbo.Supervises;
+
+-- -- Drop các bảng chính (cha) sau
+-- IF OBJECT_ID('dbo.Shipping', 'U') IS NOT NULL DROP TABLE dbo.Shipping;
+-- IF OBJECT_ID('dbo.Discount', 'U') IS NOT NULL DROP TABLE dbo.Discount;
+-- IF OBJECT_ID('dbo.[Order]', 'U') IS NOT NULL DROP TABLE dbo.[Order];
+-- IF OBJECT_ID('dbo.Customer', 'U') IS NOT NULL DROP TABLE dbo.Customer;
+-- IF OBJECT_ID('dbo.Supplier', 'U') IS NOT NULL DROP TABLE dbo.Supplier;
+-- IF OBJECT_ID('dbo.Product', 'U') IS NOT NULL DROP TABLE dbo.Product;
+-- IF OBJECT_ID('dbo.Warehouse', 'U') IS NOT NULL DROP TABLE dbo.Warehouse;
+-- IF OBJECT_ID('dbo.Employee', 'U') IS NOT NULL DROP TABLE dbo.Employee;
+
+-- 1. Drop all foreign keys
+DECLARE @sql NVARCHAR(MAX) = N'';
+SELECT @sql = @sql + N'
+ALTER TABLE [' + OBJECT_SCHEMA_NAME(parent_object_id) + '].[' + OBJECT_NAME(parent_object_id) + '] DROP CONSTRAINT [' + name + '];'
+FROM sys.foreign_keys;
+EXEC sp_executesql @sql;
+
+-- 2. Drop all tables
+SET @sql = N'';
+SELECT @sql = @sql + 'DROP TABLE [' + SCHEMA_NAME(schema_id) + '].[' + name + '];'
+FROM sys.tables;
+EXEC sp_executesql @sql;
 
 -- Create Tables
 CREATE TABLE dbo.Employee (
@@ -142,6 +157,7 @@ CREATE TABLE dbo.Stores (
     warehouse_id INT,
     product_id INT,
     stock_quantity INT NOT NULL DEFAULT 0,
+    last_updated DATETIME NOT NULL DEFAULT GETDATE(),
     PRIMARY KEY (warehouse_id, product_id),
     FOREIGN KEY (warehouse_id) REFERENCES dbo.Warehouse(warehouse_id),
     FOREIGN KEY (product_id) REFERENCES dbo.Product(product_id)
